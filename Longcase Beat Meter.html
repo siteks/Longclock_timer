@@ -1,0 +1,732 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Longcase Beat Meter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600&family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow instrument column — controls, live signal, big readouts, timegrapher trace, settings, workshop notes. */
+:root {
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --ink: #161b28;
+  --muted: #5b6375;
+  --line: #d6dbe4;
+  --steel: #2546a6;          /* blued-steel hands: beat A, primary */
+  --brass: #96701f;          /* brass: beat B */
+  --good: #23784b; --warn: #a86a0c; --bad: #b53326;
+  --good-bg: #e2f2e9; --warn-bg: #f7ecd9; --bad-bg: #f8e1de;
+  --scope: #f6f8fb;
+  --f-display: "Cormorant SC", "Cormorant Garamond", Georgia, serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1016; --panel: #151a23; --ink: #e6e9ef; --muted: #8b93a5; --line: #252c39;
+  --steel: #86a2ff; --brass: #d8ad55;
+  --good: #5ccb8c; --warn: #e8ae52; --bad: #f0786a;
+  --good-bg: #15301f; --warn-bg: #33270f; --bad-bg: #3a1a17;
+  --scope: #10141c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1016; --panel: #151a23; --ink: #e6e9ef; --muted: #8b93a5; --line: #252c39;
+  --steel: #86a2ff; --brass: #d8ad55;
+  --good: #5ccb8c; --warn: #e8ae52; --bad: #f0786a;
+  --good-bg: #15301f; --warn-bg: #33270f; --bad-bg: #3a1a17;
+  --scope: #10141c; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 560px; margin: 0 auto; padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font: 600 30px/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+.eyebrow { font: 500 11px/1 var(--f-data); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.label { font: 500 11px/1.2 var(--f-data); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* controls */
+.controls { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+button, .filebtn { font: 600 15px/1 var(--f-body); border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 13px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; }
+button:focus-visible, .filebtn:focus-within, select:focus-visible, input:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+#listen { background: var(--steel); border-color: var(--steel); color: var(--bg); }
+#listen.on { background: var(--bad); border-color: var(--bad); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+#listen.on .dot { animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .25 } }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.filebtn { position: relative; }
+.status { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font: 400 13px/1.4 var(--f-data); color: var(--muted); }
+.badge { font: 600 10px/1 var(--f-data); letter-spacing: .1em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; background: var(--warn-bg); color: var(--warn); }
+.notice { border-left: 3px solid var(--warn); background: var(--warn-bg); padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+
+/* scope */
+.scopebox { position: relative; padding: 0; overflow: hidden; }
+#scope { display: block; width: 100%; height: 92px; background: var(--scope); }
+.scopecap { position: absolute; left: 10px; top: 8px; font: 500 11px/1 var(--f-data); color: var(--muted); letter-spacing: .06em; }
+.scopecap b { color: var(--ink); font-weight: 600; }
+
+/* readouts */
+.read { display: flex; flex-direction: column; gap: 6px; }
+.readhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.big { font: 600 clamp(38px, 12vw, 54px)/1 var(--f-data); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.big small { font-size: .42em; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.sub { font: 400 13px/1.5 var(--f-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+.sub b { color: var(--ink); font-weight: 600; }
+.chip { font: 600 12px/1 var(--f-body); padding: 6px 9px; border-radius: 999px; white-space: nowrap; background: var(--line); color: var(--muted); }
+.chip.good { background: var(--good-bg); color: var(--good); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.bad { background: var(--bad-bg); color: var(--bad); }
+.ratiobar { position: relative; height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.ratiobar i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--steel); }
+.ratiobar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--ink); opacity: .5; }
+.advice { font-size: 14px; }
+
+.freq { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.freq > div { background: var(--panel); padding: 11px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.freq .v { font: 600 20px/1.1 var(--f-data); font-variant-numeric: tabular-nums; }
+.freq .v small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+
+/* trace */
+#trace { display: block; width: 100%; height: 210px; }
+.legend { display: flex; gap: 14px; font: 400 12px/1 var(--f-data); color: var(--muted); align-items: center; flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.legend .a::before { background: var(--steel); } .legend .b::before { background: var(--brass); }
+.caption { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* settings */
+details summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+details summary::after { content: "+"; font-family: var(--f-data); color: var(--muted); }
+details[open] summary::after { content: "−"; }
+.settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+select, input[type=number] { font: 500 14px var(--f-data); padding: 9px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+input[type=range] { width: 100%; accent-color: var(--steel); }
+.hint { font-size: 12px; color: var(--muted); }
+
+.notes h2 { font: 600 21px/1.1 var(--f-display); margin: 0 0 8px; letter-spacing: .02em; }
+.notes h3 { font: 600 14px/1.3 var(--f-body); margin: 14px 0 4px; }
+.notes p { margin: 0; font-size: 14px; color: var(--ink); max-width: 65ch; }
+.notes p + p { margin-top: 6px; }
+@media (max-width: 380px) { .controls { grid-template-columns: 1fr 1fr; } #listen { grid-column: 1 / -1; } .settings { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { #listen.on .dot { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Longcase Beat Meter</h1>
+    <span class="eyebrow">Pendulum · anchor escapement</span>
+  </header>
+
+  <div class="controls">
+    <button id="listen" type="button"><span class="dot"></span><span id="listenTxt">Listen</span></button>
+    <button id="reset" type="button">Reset</button>
+    <label class="filebtn">Recording<input id="file" type="file" accept="audio/*,video/*"></label>
+  </div>
+  <div class="status"><span id="status">Sample reading shown. Tap Listen with the phone near the clock.</span><span id="badge" class="badge">Sample</span></div>
+  <div id="notice" class="notice" hidden></div>
+
+  <div class="panel scopebox">
+    <canvas id="scope" aria-label="Live tick signal"></canvas>
+    <div class="scopecap">SIGNAL <b id="snr">—</b> <span id="snrWord"></span></div>
+  </div>
+
+  <div class="panel read" aria-live="polite">
+    <div class="readhead"><span class="label">Beat ratio · short : long</span><span id="beatChip" class="chip">—</span></div>
+    <div class="big" id="ratio">—</div>
+    <div class="ratiobar"><i id="ratioFill" style="width:50%"></i></div>
+    <div class="sub">Beat error <b id="be">—</b> · intervals <b id="ints">—</b></div>
+  </div>
+
+  <div class="panel read">
+    <div class="readhead"><span class="label" id="rateLabel">Rate</span><span id="rateChip" class="chip">—</span></div>
+    <div class="big" id="rate">—</div>
+    <div class="sub advice" id="rateAdvice">—</div>
+  </div>
+
+  <div class="freq">
+    <div><span class="label">Beats / hour</span><span class="v" id="bph">—</span></div>
+    <div><span class="label">Beat period</span><span class="v" id="beatMs">—</span></div>
+    <div><span class="label">Tick frequency</span><span class="v" id="tickHz">—</span></div>
+    <div><span class="label">Pendulum</span><span class="v" id="pendHz">—</span></div>
+  </div>
+  <div class="sub" id="precision">—</div>
+
+  <div class="panel read">
+    <div class="readhead"><span class="label">Timegrapher trace</span><span class="legend"><span class="a">Beat A</span><span class="b">Beat B</span></span></div>
+    <canvas id="trace" aria-label="Each beat's timing offset in milliseconds"></canvas>
+    <p class="caption">Each dot is one beat, offset from the average beat. In beat, both colours sit on one line. The gap between the two lines is the beat error.</p>
+  </div>
+
+  <details class="panel" id="settingsBox">
+    <summary>Settings</summary>
+    <div class="settings">
+      <div class="field">
+        <label class="label" for="target">Target beat</label>
+        <select id="target">
+          <option value="0">Auto</option>
+          <option value="0.5">0.5 s · 7200 bph</option>
+          <option value="0.75">0.75 s · 4800 bph</option>
+          <option value="1">1 s · 3600 bph (seconds)</option>
+          <option value="1.25">1.25 s · 2880 bph</option>
+          <option value="1.5">1.5 s · 2400 bph</option>
+          <option value="2">2 s · 1800 bph</option>
+          <option value="custom">Custom bph…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="customBph">Custom bph</label>
+        <input id="customBph" type="number" inputmode="decimal" step="any" placeholder="e.g. 3600" disabled>
+      </div>
+      <div class="field">
+        <label class="label" for="win">Average over</label>
+        <select id="win">
+          <option value="20">Last 20 beats</option>
+          <option value="60">Last 60 beats</option>
+          <option value="180">Last 180 beats</option>
+          <option value="0">All beats</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="hp">Ignore sound below</label>
+        <select id="hp">
+          <option value="300">300 Hz</option>
+          <option value="1000">1 kHz</option>
+          <option value="2500">2.5 kHz</option>
+        </select>
+      </div>
+      <div class="field wide">
+        <label class="label" for="sens">Trigger level <span id="sensVal">30%</span></label>
+        <input id="sens" type="range" min="10" max="70" step="5" value="30">
+        <span class="hint">Lower catches the first click of each tick; raise it if voices or knocks are being counted.</span>
+      </div>
+      <div class="field wide">
+        <label class="label" for="pitch">Rating nut thread pitch (mm)</label>
+        <input id="pitch" type="number" inputmode="decimal" step="any" min="0" placeholder="Optional, e.g. 0.8">
+        <span class="hint">Adds turns of the nut to the rate advice.</span>
+      </div>
+    </div>
+  </details>
+
+  <section class="panel notes">
+    <h2>Using it on the clock</h2>
+    <h3>Placing the phone</h3>
+    <p>Open the trunk door and stand the phone on the case floor, or rest it against the hood near the movement. Quiet room, fans off. Keep the screen on; the page asks the phone not to sleep while listening.</p>
+    <h3>Putting it in beat</h3>
+    <p>Aim for a ratio within 49.8 : 50.2 (beat error under 0.5% of the beat). Bend the crutch a very small amount at its loop, or slide an adjustable crutch, then let the pendulum settle and tap Reset. If the error grows, go the other way. Set beat with the case standing in its final position and fixed to the wall, since levelling the case shifts it.</p>
+    <h3>Regulating</h3>
+    <p>The rating nut under the bob sets rate: lower the bob to slow the clock, raise it to speed it up. On a seconds pendulum, 1 s/day is about 0.023 mm of bob travel. Use “Last 180 beats” for the fine reading. The phone's own clock is usually good to a couple of seconds a day, so check the final rating against a time signal over a week.</p>
+    <h3>No live microphone here?</h3>
+    <p>Record a minute or two of ticking with the phone's voice recorder, then tap Recording to analyse the file.</p>
+  </section>
+</div>
+
+<script>
+// ---------- Tick detector: high-pass, envelope, adaptive threshold ----------
+class TickDetector {
+  constructor(fs, opts = {}) {
+    this.fs = fs;
+    this.sens = opts.sens ?? 0.3;
+    this.setHighpass(opts.hpHz ?? 1000);
+    this.x1 = this.x2 = this.y1 = this.y2 = 0;
+    this.env = 0; this.prevEnv = 0;
+    this.rel = Math.exp(-1 / (fs * 0.003));
+    this.n = 0;
+    this.blk = Math.max(1, Math.round(fs / 200));          // 5 ms blocks
+    this.bi = 0; this.bSum = 0; this.bMax = 0;
+    this.floor = 1e-6; this.floorInit = false;
+    this.ring = new Float32Array(800); this.ri = 0;        // 4 s of block maxima
+    this.peakRef = 0; this.thr = Infinity;
+    this.lockUntil = 0; this.refractory = 0.25;
+    this.pending = null;
+    this.scopeLen = 600;                                   // 3 s of blocks
+    this.scopeEnv = new Float32Array(this.scopeLen);
+    this.scopeThr = new Float32Array(this.scopeLen);
+    this.scopeHead = 0;
+  }
+  setHighpass(f0) {
+    const w = 2 * Math.PI * f0 / this.fs, q = Math.SQRT1_2;
+    const al = Math.sin(w) / (2 * q), cw = Math.cos(w), a0 = 1 + al;
+    this.b0 = (1 + cw) / 2 / a0; this.b1 = -(1 + cw) / a0; this.b2 = (1 + cw) / 2 / a0;
+    this.a1 = -2 * cw / a0; this.a2 = (1 - al) / a0;
+  }
+  get snr() { return this.peakRef / Math.max(this.floor, 1e-9); }
+  process(buf, onBeat) {
+    const { b0, b1, b2, a1, a2, rel, fs } = this;
+    let { x1, x2, y1, y2, env, prevEnv } = this;
+    for (let k = 0; k < buf.length; k++) {
+      const x = buf[k];
+      const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1; x1 = x; y2 = y1; y1 = y;
+      const a = y < 0 ? -y : y;
+      env = a > env * rel ? a : env * rel;
+      const idx = this.n;
+      const p = this.pending;
+      if (p) {
+        if (env > p.amp) p.amp = env;
+        if (idx >= p.until) { this.pending = null; onBeat(p.t, p.amp); }
+      }
+      const thr = this.thr;
+      if (idx >= this.lockUntil && env >= thr && prevEnv < thr) {
+        const frac = (thr - prevEnv) / (env - prevEnv);
+        this.pending = { t: (idx - 1 + frac) / fs, amp: env, until: idx + Math.round(0.03 * fs) };
+        this.lockUntil = idx + Math.round(this.refractory * fs);
+      }
+      prevEnv = env;
+      this.bSum += env; if (env > this.bMax) this.bMax = env;
+      if (++this.bi === this.blk) this._endBlock();
+      this.n++;
+    }
+    Object.assign(this, { x1, x2, y1, y2, env, prevEnv });
+  }
+  _endBlock() {
+    const mean = this.bSum / this.blk;
+    if (!this.floorInit) { this.floor = mean; this.floorInit = true; }
+    else if (mean < this.floor) this.floor += (mean - this.floor) * 0.3;
+    else this.floor += (mean - this.floor) * 0.002;
+    if (this.floor < 1e-7) this.floor = 1e-7;
+    this.ring[this.ri] = this.bMax; this.ri = (this.ri + 1) % this.ring.length;
+    let m = 0; for (let i = 0; i < this.ring.length; i++) if (this.ring[i] > m) m = this.ring[i];
+    this.peakRef = m;
+    this.thr = m / this.floor > 4 ? this.floor + this.sens * (m - this.floor) : Infinity;
+    this.scopeEnv[this.scopeHead] = this.bMax;
+    this.scopeThr[this.scopeHead] = this.thr;
+    this.scopeHead = (this.scopeHead + 1) % this.scopeLen;
+    this.bi = 0; this.bSum = 0; this.bMax = 0;
+  }
+}
+
+// ---------- Beat analysis: index beats, fit t = a + b·n + c·(-1)^n ----------
+function median(a) { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+
+function fitBeats(pts) {
+  const n0 = pts[0].n, t0 = pts[0].t;
+  let S = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], v = [0, 0, 0];
+  const rows = pts.map(p => { const x = p.n - n0, s = (p.n & 1) ? -1 : 1, y = p.t - t0; return [1, x, s, y]; });
+  for (const r of rows) for (let i = 0; i < 3; i++) { v[i] += r[i] * r[3]; for (let j = 0; j < 3; j++) S[i][j] += r[i] * r[j]; }
+  const [[a, b, c], [d, e, f], [g, h, k]] = S;
+  const A = e * k - f * h, B = -(d * k - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (Math.abs(det) < 1e-12) return null;
+  const inv = [
+    [A, -(b * k - c * h), b * f - c * e],
+    [B, a * k - c * g, -(a * f - c * d)],
+    [C, -(a * h - b * g), a * e - b * d],
+  ].map(r => r.map(x => x / det));
+  const sol = inv.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+  let ssr = 0;
+  const resid = rows.map(r => { const e2 = r[3] - (sol[0] + sol[1] * r[1] + sol[2] * r[2]); ssr += e2 * e2; return e2; });
+  const dof = Math.max(1, rows.length - 3);
+  const sigma = Math.sqrt(ssr / dof);
+  return {
+    a: t0 + sol[0] - sol[1] * n0, b: sol[1], c: sol[2], sigma,
+    seB: sigma * Math.sqrt(Math.max(inv[1][1], 0)), seC: sigma * Math.sqrt(Math.max(inv[2][2], 0)),
+    resid,
+  };
+}
+
+class BeatAnalyzer {
+  constructor() { this.window = 60; this.reset(); }
+  reset() { this.raw = []; this.beats = []; this.T = null; this.res = null; this.rejected = 0; this.missRun = 0; }
+  predict(n) { const r = this.res; return r.a + r.b * n + r.c * ((n & 1) ? -1 : 1); }
+  add(t, amp) {
+    if (!this.T) {
+      this.raw.push({ t, amp });
+      if (this.raw.length > 10) this.raw.shift();
+      if (this.raw.length < 5) return false;
+      const d = []; for (let i = 1; i < this.raw.length; i++) d.push(this.raw[i].t - this.raw[i - 1].t);
+      const m = median(d);
+      if (!(m > 0.12 && m < 3) || d.filter(x => Math.abs(x - m) < 0.15 * m).length < 4) return false;
+      this.T = m; this.beats = [];
+      for (const r of this.raw) {
+        if (!this.beats.length) { this.beats.push({ t: r.t, n: 0, amp: r.amp }); continue; }
+        const last = this.beats[this.beats.length - 1];
+        const k = (r.t - last.t) / m, ri = Math.round(k);
+        if (ri >= 1 && Math.abs(k - ri) < 0.2) this.beats.push({ t: r.t, n: last.n + ri, amp: r.amp });
+      }
+      this.raw = [];
+      this.fit();
+      return true;
+    }
+    const last = this.beats[this.beats.length - 1];
+    let n, err;
+    if (this.res && this.beats.length >= 8) {
+      n = Math.round((t - this.res.a) / this.res.b);
+      err = Math.abs(t - this.predict(n));
+    } else {
+      const k = (t - last.t) / this.T; n = last.n + Math.round(k);
+      err = Math.abs(k - Math.round(k)) * this.T;
+    }
+    if (n <= last.n || err > 0.2 * this.T) {
+      this.rejected++;
+      if (++this.missRun >= 8) { const keep = this.window; this.reset(); this.window = keep; }
+      return false;
+    }
+    this.missRun = 0;
+    this.beats.push({ t, n, amp });
+    if (this.beats.length > 4000) this.beats.splice(0, this.beats.length - 4000);
+    this.fit();
+    return true;
+  }
+  fit() {
+    const B = this.beats, N = B.length;
+    if (N < 4) { this.res = null; return; }
+    const W = this.window ? Math.min(N, this.window) : N;
+    const pts = B.slice(N - W);
+    let use = pts, f = fitBeats(use);
+    if (!f) return;
+    const lim = Math.max(4 * f.sigma, 0.0015);
+    const kept = pts.filter((p, i) => Math.abs(f.resid[i]) <= lim);
+    if (kept.length >= 4 && kept.length < pts.length) { const f2 = fitBeats(kept); if (f2) { f = f2; use = kept; } }
+    const keptSet = new Set(use);
+    let aE = 0, nE = 0, aO = 0, nO = 0;
+    for (const p of use) { if (p.n & 1) { aO += p.amp; nO++; } else { aE += p.amp; nE++; } }
+    this.res = {
+      ...f, count: use.length, window: pts.length,
+      points: pts.map(p => ({ n: p.n, odd: !!(p.n & 1), r: (p.t - (f.a + f.b * p.n)) * 1000, out: !keptSet.has(p) })),
+      ampEven: nE ? aE / nE : 0, ampOdd: nO ? aO / nO : 0,
+    };
+    if (N >= 8) this.T = f.b;
+  }
+}
+
+const TARGETS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+function summarize(res, targetBeat, total) {
+  if (!res) return null;
+  const b = res.b, c = res.c;
+  const auto = TARGETS.reduce((best, x) => Math.abs(x / b - 1) < Math.abs(best / b - 1) ? x : best, TARGETS[0]);
+  const Tt = targetBeat > 0 ? targetBeat : (Math.abs(auto / b - 1) < 0.03 ? auto : null);
+  const out = {
+    beatS: b, bph: 3600 / b, beatHz: 1 / b, pendHz: 1 / (2 * b),
+    lengthM: 9.80665 * (2 * b) ** 2 / (4 * Math.PI ** 2),
+    beatErrMs: 2 * Math.abs(c) * 1000, beatErrSe: 2 * res.seC * 1000,
+    shortMs: (b - 2 * Math.abs(c)) * 1000, longMs: (b + 2 * Math.abs(c)) * 1000,
+    sigmaMs: res.sigma * 1000, count: res.count, total,
+    target: Tt, autoTarget: targetBeat > 0 ? null : Tt,
+  };
+  out.shortPct = out.shortMs / (20 * b); out.longPct = out.longMs / (20 * b);
+  if (Tt) {
+    out.rate = 86400 * (Tt / b - 1);
+    out.rateSe = 86400 * Tt / (b * b) * res.seB;
+    out.bobMm = out.lengthM * 1000 * 2 * out.rate / 86400;
+  }
+  return out;
+}
+
+
+</script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('lbm.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('lbm.' + k, JSON.stringify(v)); } catch {} },
+};
+const settings = {
+  target: store.get('target', '0'), customBph: store.get('customBph', ''),
+  win: store.get('win', 60), hp: store.get('hp', 1000), sens: store.get('sens', 30), pitch: store.get('pitch', ''),
+};
+const S = { mode: 'sample', det: null, an: new BeatAnalyzer(), markers: [], ctx: null, stream: null, node: null, sink: null, wake: null, dirty: true, fileLabel: '' };
+
+// ---------- helpers ----------
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function fmt(x, d) { return Number.isFinite(x) ? x.toFixed(d) : '—'; }
+function signed(x, d) { return (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(d); }
+function targetBeat() {
+  if (settings.target === 'custom') { const b = parseFloat(settings.customBph); return b > 0 ? 3600 / b : 0; }
+  return parseFloat(settings.target) || 0;
+}
+function setStatus(t, badge) { $('status').textContent = t; const b = $('badge'); b.hidden = !badge; if (badge) b.textContent = badge; }
+function notice(html) { const n = $('notice'); if (!html) { n.hidden = true; return; } n.innerHTML = html; n.hidden = false; }
+function makeDetector(fs) { return new TickDetector(fs, { sens: settings.sens / 100, hpHz: settings.hp }); }
+function onBeat(t, amp) {
+  const ok = S.an.add(t, amp);
+  if (S.an.T) S.det.refractory = Math.max(0.12, 0.55 * S.an.T);
+  S.markers.push({ t, ok });
+  if (S.markers.length > 40) S.markers.shift();
+  S.dirty = true;
+}
+
+// ---------- sample reading so the page shows a working state ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function loadSample() {
+  const r = rng(11), g = () => Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(2 * Math.PI * r());
+  S.mode = 'sample'; S.an.reset(); S.an.window = +settings.win; S.markers = [];
+  const b = 1.00011, c = 0.0019;
+  for (let n = 0; n < 96; n++) { if (n === 37) continue; const s = n & 1 ? -1 : 1; S.an.add(1 + n * b + c * s + 0.00028 * g(), s > 0 ? 0.3 : 0.2); }
+  const fs = 24000, x = new Float32Array(fs * 3.4);
+  for (let i = 0; i < x.length; i++) x[i] = 0.004 * g();
+  for (let k = 0; k < 4; k++) {
+    const s0 = Math.round((0.35 + k * b) * fs), A = k & 1 ? 0.18 : 0.3;
+    for (let j = 0; j < 0.035 * fs && s0 + j < x.length; j++) x[s0 + j] += A * Math.exp(-j / fs / 0.006) * g();
+  }
+  S.det = makeDetector(fs);
+  S.det.process(x, (t) => S.markers.push({ t, ok: true }));
+  S.dirty = true;
+  setStatus('Sample reading shown. Tap Listen with the phone near the clock.', 'Sample');
+}
+
+// ---------- live microphone ----------
+const WORKLET = `class Tap extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(2048);this.i=0}
+process(inp){const c=inp[0]&&inp[0][0];if(c){for(let k=0;k<c.length;k++){this.b[this.i++]=c[k];if(this.i===2048){this.port.postMessage(this.b,[this.b.buffer]);this.b=new Float32Array(2048);this.i=0}}}return true}}
+registerProcessor('tap',Tap);`;
+
+async function startLive() {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    notice('This page can only use the microphone when opened from an <b>https://</b> address or a local file in Chrome. You can still record a minute of ticking with your voice recorder and tap <b>Recording</b>.');
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) {
+    notice(e && e.name === 'NotAllowedError'
+      ? 'Microphone access was refused here. If Chrome asked, allow the microphone and tap Listen again. If you are viewing this inside another app, open the standalone copy in Chrome, or record the clock and tap <b>Recording</b>.'
+      : 'The microphone could not be opened (' + (e && e.name || 'error') + '). Record the clock with your voice recorder and tap <b>Recording</b> instead.');
+    return;
+  }
+  notice('');
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  await ctx.resume();
+  const src = ctx.createMediaStreamSource(stream);
+  const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination);
+  let node;
+  try {
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    node = new AudioWorkletNode(ctx, 'tap', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+    node.port.onmessage = e => S.det && S.mode === 'live' && S.det.process(e.data, onBeat);
+  } catch {
+    node = ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = e => S.det && S.mode === 'live' && S.det.process(e.inputBuffer.getChannelData(0), onBeat);
+  }
+  src.connect(node); node.connect(sink);
+  Object.assign(S, { ctx, stream, node, sink, mode: 'live', markers: [] });
+  S.det = makeDetector(ctx.sampleRate);
+  S.an.reset(); S.an.window = +settings.win;
+  $('listen').classList.add('on'); $('listenTxt').textContent = 'Stop';
+  requestWake();
+  S.dirty = true;
+}
+function stopLive() {
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+  if (S.ctx) S.ctx.close().catch(() => {});
+  Object.assign(S, { ctx: null, stream: null, node: null, sink: null });
+  if (S.mode === 'live') S.mode = 'stopped';
+  $('listen').classList.remove('on'); $('listenTxt').textContent = 'Listen';
+  if (S.wake) { S.wake.release().catch(() => {}); S.wake = null; }
+  S.dirty = true;
+}
+async function requestWake() {
+  try { if ('wakeLock' in navigator) S.wake = await navigator.wakeLock.request('screen'); } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.mode === 'live') requestWake(); });
+
+// ---------- recordings ----------
+async function analyseFile(file) {
+  stopLive();
+  notice('');
+  setStatus('Reading ' + file.name + '…', null);
+  let buf;
+  try {
+    const ab = await file.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    buf = await ctx.decodeAudioData(ab);
+    ctx.close().catch(() => {});
+  } catch {
+    notice('That file could not be decoded as audio. Try an .m4a, .mp3, .wav or .ogg recording.');
+    setStatus('No reading yet.', null);
+    return;
+  }
+  const fs = buf.sampleRate, ch = buf.getChannelData(0);
+  S.mode = 'file'; S.markers = []; S.det = makeDetector(fs); S.an.reset(); S.an.window = 0;
+  const step = fs * 2;
+  for (let i = 0; i < ch.length; i += step) {
+    S.det.process(ch.subarray(i, Math.min(ch.length, i + step)), onBeat);
+    if ((i / step) % 15 === 0) { setStatus('Analysing… ' + Math.round(100 * i / ch.length) + '%', null); await new Promise(r => setTimeout(r)); }
+  }
+  const m = Math.floor(buf.duration / 60), s = Math.round(buf.duration % 60);
+  S.fileLabel = file.name + ' · ' + m + ':' + String(s).padStart(2, '0');
+  S.dirty = true;
+}
+
+// ---------- rendering: readouts ----------
+function render() {
+  const an = S.an, res = an.res;
+  const sum = summarize(res, targetBeat(), an.beats.length);
+  if (S.mode === 'live') {
+    setStatus(!an.T ? 'Listening · finding the beat…' : 'Listening · ' + an.beats.length + ' beats' + (an.rejected ? ' · ' + an.rejected + ' sounds ignored' : ''), null);
+  } else if (S.mode === 'file') {
+    setStatus(S.fileLabel + ' · ' + (an.beats.length ? an.beats.length + ' beats, whole recording' : 'no steady ticking found'), 'Recording');
+  } else if (S.mode === 'stopped') {
+    setStatus('Stopped · ' + an.beats.length + ' beats', null);
+  }
+  const has = sum && sum.count >= 6;
+  // beat
+  if (has) {
+    $('ratio').innerHTML = fmt(sum.shortPct, 1) + '<small>:</small>' + fmt(sum.longPct, 1);
+    $('ratioFill').style.width = Math.max(0, Math.min(100, 50 + (sum.longPct - 50) * 10)) + '%';
+    $('be').textContent = fmt(sum.beatErrMs, 1) + ' ms ±' + fmt(Math.max(sum.beatErrSe, 0.05), 1);
+    $('ints').textContent = fmt(sum.shortMs, 1) + ' / ' + fmt(sum.longMs, 1) + ' ms';
+    const pct = sum.beatErrMs / (sum.beatS * 10);
+    const chip = $('beatChip');
+    chip.className = 'chip ' + (pct <= 0.5 ? 'good' : pct <= 1.5 ? 'warn' : 'bad');
+    chip.textContent = pct <= 0.5 ? 'In beat' : pct <= 1.5 ? 'Slightly out' : 'Out of beat';
+  } else {
+    $('ratio').textContent = '—'; $('ratioFill').style.width = '50%';
+    $('be').textContent = '—'; $('ints').textContent = '—';
+    $('beatChip').className = 'chip'; $('beatChip').textContent = an.T ? 'Counting…' : 'Waiting';
+  }
+  // rate
+  const rateChip = $('rateChip');
+  $('rateLabel').textContent = sum && sum.target ? 'Rate vs ' + sum.target.toFixed(sum.target % 1 ? 3 : 0).replace(/0+$/, '').replace(/\.$/, '') + ' s beat' + (sum.autoTarget ? ' (auto)' : '') : 'Rate';
+  if (sum && sum.count >= 10 && sum.rate !== undefined) {
+    $('rate').innerHTML = signed(sum.rate, Math.abs(sum.rate) < 100 ? 1 : 0) + '<small>s/day</small>';
+    const noise = Math.max(2 * sum.rateSe, 0.5);
+    const fast = sum.rate > 0;
+    rateChip.className = 'chip ' + (Math.abs(sum.rate) <= Math.max(noise, 2) ? 'good' : Math.abs(sum.rate) <= 30 ? 'warn' : 'bad');
+    rateChip.textContent = Math.abs(sum.rate) <= noise ? 'On time' : fast ? 'Gaining' : 'Losing';
+    let adv = '±' + fmt(sum.rateSe, sum.rateSe < 1 ? 2 : 1) + ' s/day · ';
+    if (Math.abs(sum.rate) <= noise) adv += 'within measurement noise. Leave the rating nut alone.';
+    else {
+      const mm = Math.abs(sum.bobMm);
+      adv += (fast ? 'Lower' : 'Raise') + ' the bob <b>' + (mm < 1 ? mm.toFixed(2) : mm.toFixed(1)) + ' mm</b>';
+      const p = parseFloat(settings.pitch);
+      if (p > 0) adv += ' (about <b>' + (mm / p).toFixed(mm / p < 2 ? 2 : 1) + ' turns</b> ' + (fast ? 'undone' : 'tightened') + ')';
+      adv += '.';
+    }
+    $('rateAdvice').innerHTML = adv;
+  } else {
+    $('rate').textContent = '—';
+    rateChip.className = 'chip'; rateChip.textContent = sum && sum.rate === undefined && sum.count >= 10 ? 'No target' : 'Waiting';
+    $('rateAdvice').textContent = sum && sum.count >= 10 && sum.rate === undefined ? 'Beat is not near a standard length. Pick a target beat in Settings.' : 'Needs about 10 beats.';
+  }
+  // frequency
+  if (sum && sum.count >= 4) {
+    $('bph').innerHTML = fmt(sum.bph, 1);
+    $('beatMs').innerHTML = fmt(sum.beatS * 1000, 2) + '<small>ms</small>';
+    $('tickHz').innerHTML = fmt(sum.beatHz, 5) + '<small>Hz</small>';
+    $('pendHz').innerHTML = fmt(sum.pendHz, 5) + '<small>Hz</small>';
+    $('precision').textContent = 'Theoretical pendulum ' + fmt(sum.lengthM * 1000, 0) + ' mm · timing scatter ' + fmt(sum.sigmaMs, 2) + ' ms · ' + sum.count + ' beats in fit';
+  } else {
+    for (const id of ['bph', 'beatMs', 'tickHz', 'pendHz']) $(id).textContent = '—';
+    $('precision').textContent = S.mode === 'live' ? 'Readings appear after a few beats.' : '—';
+  }
+  drawTrace(res);
+}
+
+// ---------- canvases ----------
+function fitCanvas(cv) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, w, h];
+}
+function drawScope() {
+  const det = S.det, cv = $('scope'); if (!det) return;
+  const [g, w, h] = fitCanvas(cv);
+  g.clearRect(0, 0, w, h);
+  const L = det.scopeLen, floor = Math.max(det.floor, 1e-7);
+  const topDb = Math.max(30, 20 * Math.log10(det.peakRef / floor + 1e-9) + 6);
+  const y = v => { const db = 20 * Math.log10(Math.max(v, floor) / floor); return h - 6 - (h - 26) * Math.min(1, db / topDb); };
+  g.beginPath(); g.moveTo(0, h);
+  for (let i = 0; i < L; i++) { const v = det.scopeEnv[(det.scopeHead + i) % L]; g.lineTo(i / (L - 1) * w, y(v)); }
+  g.lineTo(w, h); g.closePath();
+  g.fillStyle = css('--steel'); g.globalAlpha = 0.28; g.fill(); g.globalAlpha = 1;
+  g.strokeStyle = css('--steel'); g.lineWidth = 1.2;
+  g.beginPath();
+  for (let i = 0; i < L; i++) { const v = det.scopeEnv[(det.scopeHead + i) % L]; i ? g.lineTo(i / (L - 1) * w, y(v)) : g.moveTo(0, y(v)); }
+  g.stroke();
+  g.setLineDash([4, 4]); g.strokeStyle = css('--brass'); g.beginPath();
+  let started = false;
+  for (let i = 0; i < L; i++) { const t = det.scopeThr[(det.scopeHead + i) % L]; if (!isFinite(t)) { started = false; continue; } const xx = i / (L - 1) * w; started ? g.lineTo(xx, y(t)) : g.moveTo(xx, y(t)); started = true; }
+  g.stroke(); g.setLineDash([]);
+  const now = (det.n - det.bi) / det.fs, span = L * det.blk / det.fs;
+  for (const m of S.markers) {
+    const xx = w - (now - m.t) / span * w; if (xx < 0 || xx > w) continue;
+    g.fillStyle = m.ok ? css('--ink') : css('--muted');
+    g.beginPath(); g.moveTo(xx - 4, h); g.lineTo(xx + 4, h); g.lineTo(xx, h - 7); g.closePath(); g.fill();
+  }
+  const snr = 20 * Math.log10(det.snr || 1);
+  $('snr').textContent = isFinite(snr) && det.peakRef > 0 ? snr.toFixed(0) + ' dB' : '—';
+  $('snrWord').textContent = !(det.peakRef > 0) ? '' : snr < 12 ? '· too quiet, move closer' : snr < 20 ? '· weak' : '· good';
+}
+function niceStep(range) { const r = range / 3, p = Math.pow(10, Math.floor(Math.log10(r))); const m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; }
+function drawTrace(res) {
+  const cv = $('trace'); const [g, w, h] = fitCanvas(cv);
+  g.clearRect(0, 0, w, h);
+  const ink = css('--ink'), muted = css('--muted'), line = css('--line'), A = css('--steel'), B = css('--brass');
+  const padL = 44, padR = 18, padT = 8, padB = 22;
+  g.font = '11px ' + css('--f-data');
+  if (!res || !res.points.length) {
+    g.fillStyle = muted; g.textAlign = 'center'; g.fillText('Beats will plot here', w / 2, h / 2); return;
+  }
+  const pts = res.points;
+  let m = 0; for (const p of pts) if (!p.out) m = Math.max(m, Math.abs(p.r));
+  const R0 = Math.max(1.5, m * 1.2), st = niceStep(2 * R0), R = Math.ceil(R0 / st) * st;
+  const n0 = pts[0].n, n1 = Math.max(pts[pts.length - 1].n, n0 + 1);
+  const X = n => padL + (n - n0) / (n1 - n0) * (w - padL - padR);
+  const Y = r => padT + (R - Math.max(-R, Math.min(R, r))) / (2 * R) * (h - padT - padB);
+  g.strokeStyle = line; g.lineWidth = 1; g.fillStyle = muted; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (let v = -R; v <= R + 1e-9; v += st) {
+    const yy = Math.round(Y(v)) + 0.5; g.beginPath(); g.moveTo(padL, yy); g.lineTo(w - padR, yy); g.stroke();
+    g.fillText((v > 0 ? '+' : '') + (Math.abs(v) < 1e-9 ? '0' : +v.toFixed(2)) + ' ms', padL - 6, yy);
+  }
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.fillText('beat ' + n0, padL, h - 5);
+  g.textAlign = 'right'; g.fillText('beat ' + n1, w - padR, h - 5);
+  const cm = res.c * 1000;
+  g.setLineDash([5, 4]); g.lineWidth = 1.2;
+  g.strokeStyle = A; g.beginPath(); g.moveTo(padL, Y(cm)); g.lineTo(w - padR, Y(cm)); g.stroke();
+  g.strokeStyle = B; g.beginPath(); g.moveTo(padL, Y(-cm)); g.lineTo(w - padR, Y(-cm)); g.stroke();
+  g.setLineDash([]);
+  const rad = pts.length > 120 ? 2.2 : 3.2;
+  for (const p of pts) {
+    g.beginPath(); g.arc(X(p.n), Y(p.r), rad, 0, Math.PI * 2);
+    if (p.out) { g.strokeStyle = muted; g.lineWidth = 1; g.stroke(); }
+    else { g.fillStyle = p.odd ? B : A; g.fill(); }
+  }
+  // beat-error bracket at right edge
+  if (Math.abs(cm) > R * 0.08) {
+    const xx = w - 5; g.strokeStyle = ink; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(xx - 4, Y(cm)); g.lineTo(xx, Y(cm)); g.lineTo(xx, Y(-cm)); g.lineTo(xx - 4, Y(-cm)); g.stroke();
+  }
+}
+
+function loop() {
+  if (S.mode === 'live' || S.dirty) drawScope();
+  if (S.dirty) { S.dirty = false; render(); }
+  requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+$('listen').addEventListener('click', () => { S.mode === 'live' ? stopLive() : startLive(); });
+$('reset').addEventListener('click', () => {
+  if (S.mode === 'live') { S.an.reset(); S.det = makeDetector(S.ctx.sampleRate); S.markers = []; S.dirty = true; }
+  else loadSample();
+});
+$('file').addEventListener('change', e => { const f = e.target.files[0]; if (f) analyseFile(f); e.target.value = ''; });
+const tgt = $('target'), cb = $('customBph');
+tgt.value = settings.target; cb.value = settings.customBph; cb.disabled = settings.target !== 'custom';
+tgt.addEventListener('change', () => { settings.target = tgt.value; store.set('target', tgt.value); cb.disabled = tgt.value !== 'custom'; if (!cb.disabled) cb.focus(); S.dirty = true; });
+cb.addEventListener('input', () => { settings.customBph = cb.value; store.set('customBph', cb.value); S.dirty = true; });
+$('win').value = String(settings.win);
+$('win').addEventListener('change', e => { settings.win = +e.target.value; store.set('win', settings.win); if (S.mode !== 'file') { S.an.window = settings.win; S.an.fit(); } S.dirty = true; });
+$('hp').value = String(settings.hp);
+$('hp').addEventListener('change', e => { settings.hp = +e.target.value; store.set('hp', settings.hp); if (S.det) S.det.setHighpass(settings.hp); });
+const sens = $('sens'); sens.value = settings.sens; $('sensVal').textContent = settings.sens + '%';
+sens.addEventListener('input', () => { settings.sens = +sens.value; store.set('sens', settings.sens); $('sensVal').textContent = sens.value + '%'; if (S.det) S.det.sens = settings.sens / 100; });
+$('pitch').value = settings.pitch;
+$('pitch').addEventListener('input', e => { settings.pitch = e.target.value; store.set('pitch', settings.pitch); S.dirty = true; });
+window.addEventListener('resize', () => { S.dirty = true; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { S.dirty = true; });
+new MutationObserver(() => { S.dirty = true; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+loadSample();
+requestAnimationFrame(loop);
+})();
+
+</script>
+
+</body></html>
